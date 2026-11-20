@@ -28,22 +28,10 @@ _CONNECT_ERRORS = tuple(
 _RETRYABLE_ERRORS = (errors.APIError,) + _READ_TIMEOUT_ERRORS + _CONNECT_ERRORS
 
 
-DATA_KEYWORDS_PATTERN = re.compile(
-    r"\b("
-    r"stock|inventory|sale|sales|revenue|forecast|predict|demand|order|restock|"
-    r"reorder|sku|price|margin|profit|loss|slow|fast|mover|unit|units|"
-    r"trend|low|shortage|surplus|cover|dead\s*stock"
-    r")\b",
-    re.IGNORECASE,
-)
 CHART_REQUEST_PATTERN = re.compile(
     r"\b(chart|graph|plot|visuali[sz](?:e|ation))\b",
     re.IGNORECASE,
 )
-
-
-def needs_store_data(prompt: str) -> bool:
-    return bool(DATA_KEYWORDS_PATTERN.search(prompt or ""))
 
 
 def requests_chart(prompt: str) -> bool:
@@ -262,43 +250,37 @@ def generate_shop_advice_stream(
     graph_type = requested_chart_type(clean_prompt)
     profit_requested = bool(re.search(r"\b(profit|margin|loss)\b", clean_prompt, re.IGNORECASE))
     graph_requested = graph_type is not None
-    include_data = needs_store_data(clean_prompt) or graph_requested
-    if include_data:
-        data_rule = (
-            "DATA ANALYSIS REQUIRED: Store sales, inventory, and forecast data are provided below. "
-            "Use those numbers directly to give concise, practical recommendations. "
-            "Format all money in Indian rupees (₹) using Indian digit grouping, such as ₹24,22,527.00."
+    data_rule = (
+        "SHOP DATA ACCESS: Current shop context is included with every request. You always "
+        "have access to the shop information supplied below; never claim otherwise. Use it "
+        "when relevant, answer from its actual values, and say when a requested detail is "
+        "missing. Do not claim access to external accounts, live point-of-sale systems, "
+        "GitHub or Streamlit settings, or information not supplied below. For unrelated "
+        "questions, answer briefly without volunteering shop metrics. Format money in "
+        "Indian rupees (₹) using Indian digit grouping, such as ₹24,22,527.00."
+    )
+    if profit_requested:
+        data_rule += (
+            " Only report gross profit for sales with recorded purchase cost; mark missing-cost sales as unavailable, "
+            "and do not estimate unknown costs."
         )
-        if profit_requested:
-            data_rule += (
-                " Only report gross profit for sales with recorded purchase cost; mark missing-cost sales as unavailable, "
-                "and do not estimate unknown costs."
-            )
-        if graph_requested:
-            data_rule += " Never invent or estimate missing chart values; summarize only the supplied data."
-    else:
-        data_rule = (
-            "DATA ANALYSIS NOT REQUIRED: No store data analysis is needed for this message. "
-            "Answer briefly and directly without pulling in unrequested sales or stock metrics."
-        )
+    if graph_requested:
+        data_rule += " Never invent or estimate missing chart values; summarize only the supplied data."
 
     system_parts = [data_rule]
     if custom_instructions:
         system_parts.append(f"Shop-Specific Instructions:\n{custom_instructions}")
     system_instruction = "\n\n".join(system_parts)
 
-    if include_data:
-        context_block = build_business_context(
-            settings,
-            inventory_df,
-            sales_df,
-            forecast_df,
-            graph_type=graph_type,
-            include_profit_data=profit_requested,
-        )
-        full_prompt = f"{context_block}\n\nUser Message:\n{clean_prompt}"
-    else:
-        full_prompt = f"User Message:\n{clean_prompt}"
+    context_block = build_business_context(
+        settings,
+        inventory_df,
+        sales_df,
+        forecast_df,
+        graph_type=graph_type,
+        include_profit_data=profit_requested,
+    )
+    full_prompt = f"{context_block}\n\nUser Message:\n{clean_prompt}"
 
     client = _CLIENTS.get(api_key)
     if client is None:

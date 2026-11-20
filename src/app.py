@@ -19,6 +19,7 @@ from database import (
     get_settings,
     init_db,
     record_sale,
+    reset_to_indian_grocery_demo_data,
     save_settings,
     seed_sample_data,
     seed_indian_grocery_demo_data,
@@ -1708,6 +1709,32 @@ def main() -> None:
                     st.rerun()
                 else:
                     st.info("The demo dataset is already loaded; no duplicates were added.")
+
+            st.warning(
+                "Reset replaces all inventory and sales, including test entries, with fresh "
+                "Indian grocery demo data. Your Shop Advisor settings are kept."
+            )
+            reset_confirmed = st.checkbox(
+                "I understand this will replace all inventory and sales.",
+                key="confirm_demo_reset",
+            )
+
+            def reset_demo_data():
+                if st.session_state.get("confirm_demo_reset"):
+                    item_count, sale_count = reset_to_indian_grocery_demo_data()
+                    st.session_state["demo_data_message"] = (
+                        f"Reset complete: restored {format_indian_number(item_count)} demo "
+                        f"items and {format_indian_number(sale_count)} sample sales. "
+                        "Your Shop Advisor settings were kept."
+                    )
+                    st.session_state["confirm_demo_reset"] = False
+
+            st.button(
+                "Reset All Inventory & Sales to Demo Data",
+                key="reset_indian_grocery_demo",
+                disabled=not reset_confirmed,
+                on_click=reset_demo_data,
+            )
 
         if "demo_data_message" in st.session_state:
             st.success(st.session_state.pop("demo_data_message"))

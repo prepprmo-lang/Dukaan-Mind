@@ -387,6 +387,42 @@ def seed_indian_grocery_demo_data(db_path: str = DB_NAME) -> Tuple[int, int]:
         conn.close()
 
 
+def reset_to_indian_grocery_demo_data(db_path: str = DB_NAME) -> Tuple[int, int]:
+    init_db(db_path)
+    products, sales = generate_indian_grocery_demo()
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute("DELETE FROM sales")
+            conn.execute("DELETE FROM inventory")
+            conn.execute("DELETE FROM dataset_seeds")
+            conn.executemany(
+                """
+                INSERT INTO inventory (
+                    sku, item_name, category, stock_qty, reorder_level, unit_price, purchase_cost
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                products,
+            )
+            conn.executemany(
+                """
+                INSERT INTO sales (
+                    sale_date, sku, item_name, quantity, total_amount, unit_cost
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                sales,
+            )
+            conn.execute(
+                "INSERT INTO dataset_seeds (dataset_key) VALUES (?)",
+                ("indian_grocery_180d_v2",),
+            )
+        return len(products), len(sales)
+    finally:
+        conn.close()
+
+
 def seed_sample_data(db_path: str = DB_NAME) -> None:
     upgrade_indian_grocery_demo_sales(db_path)
     conn = get_connection(db_path)

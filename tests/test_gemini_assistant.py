@@ -43,6 +43,32 @@ class GeminiModelSelectionTests(unittest.TestCase):
         self.assertEqual(response, ["Ready."])
         gemini_assistant._CLIENTS.pop(api_key, None)
 
+    def test_shop_context_is_always_sent_and_access_scope_is_clear(self):
+        api_key = "gemini-store-access-test-key"
+        gemini_assistant._CLIENTS.pop(api_key, None)
+        client = Mock()
+        client.models.generate_content_stream.return_value = [
+            SimpleNamespace(text="I can use the shop information provided to me.")
+        ]
+        empty = pd.DataFrame()
+
+        with patch("gemini_assistant.genai.Client", return_value=client):
+            list(
+                generate_shop_advice_stream(
+                    "How can you help me?",
+                    {"gemini_api_key": api_key, "shop_name": "Mamata's Shop"},
+                    empty,
+                    empty,
+                    empty,
+                )
+            )
+
+        request = client.models.generate_content_stream.call_args.kwargs
+        self.assertIn("Store Name: Mamata's Shop", request["contents"])
+        self.assertIn("SHOP DATA ACCESS", request["config"].system_instruction)
+        self.assertIn("never claim otherwise", request["config"].system_instruction)
+        gemini_assistant._CLIENTS.pop(api_key, None)
+
 
 if __name__ == "__main__":
     unittest.main()
